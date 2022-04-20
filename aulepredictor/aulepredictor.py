@@ -1,5 +1,8 @@
 """
-AulePredictor where main classes are defined.
+AulePredictor, computational tool for the prediction of
+metal-binding regions in proteins by leveraging Deep Convolutional
+Neural Networks (DCNNs).
+
 Copyright 2022 by Raúl Fernández Díaz
 """
 
@@ -12,7 +15,7 @@ import numpy as np
 
 class aule():
     """
-    DCNN-Biometall aule predictor class. The aule predictor is defined
+    AulePredictor main class. The aule predictor is defined
     by a DCNN or MC-DCNN model that will predict the metal-bindingness of
     the desired protein regions.
     Attributes
