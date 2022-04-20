@@ -2,12 +2,15 @@ name: test
 channels:
 
   - conda-forge
+  - acellera
 
   - defaults
 dependencies:
     # Base depends
   - python
   - pip
+  - pytorch
+  - moleculekit
 
     # Testing
   - pytest
