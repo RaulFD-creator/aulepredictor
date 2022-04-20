@@ -1,5 +1,5 @@
 """
-DCNN_Biometall utils file where main aule classes are defined.
+AulePredictor where main classes are defined.
 Copyright 2022 by Raúl Fernández Díaz
 """
 
