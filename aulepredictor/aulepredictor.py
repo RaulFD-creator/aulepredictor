@@ -1,5 +1,8 @@
 """
-AulePredictor where main classes are defined.
+AulePredictor, computational tool for the prediction of
+metal-binding regions in proteins by leveraging Deep Convolutional
+Neural Networks (DCNNs).
+
 Copyright 2022 by Raúl Fernández Díaz
 """
 
