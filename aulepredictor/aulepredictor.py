@@ -1,5 +1,8 @@
 """
-AulePredictor where main classes are defined.
+AulePredictor, computational tool for the prediction of
+metal-binding regions in proteins by leveraging Deep Convolutional
+Neural Networks (DCNNs).
+
 Copyright 2022 by Raúl Fernández Díaz
 """
 
@@ -83,8 +86,6 @@ class aule():
         self.model.to(device)
         self.model.eval()
 
-
-
     def __str__(self):
         """
         String representation of the aule predictor class.
@@ -97,9 +98,9 @@ class aule():
         return f"Aule predictor class powered by model: {self.model}"
 
     def predict(self, target : str,  output_dir : str='.', output_option : str='pdb',
-            candidates : str or np.array or list=None, stride: int=1, threshold : float=0.75, 
-            verbose : int=1, voxelsize : float=1, buffer : int=1, validitychecks : bool=False, 
-            minibox_size : int=16) -> np.array:
+            candidates : str or np.array or list=None, stride: int=1, threshold_1 : float=0.75, threshold_2 : float=0.6, 
+            verbose : int=1, voxelsize : float=1, validitychecks : bool=False, 
+            minibox_size : int=16, occupancy_restrictions : float=0.4) -> np.array:
         """
         Take a target protein either from its PDB ID or through a path to a 
         locally stored PDB file and create from it a voxelized representation. 
@@ -223,21 +224,23 @@ class aule():
             print(f"Voxelizing target: {target}")
         
         # Perform the voxelization
-        protein_vox, protein_centers, nvoxels = self.voxelize(target, voxelsize=voxelsize, buffer=buffer,
-                                                            validitychecks=validitychecks)
+        centers, protein_vox, protein_centers, nvoxels = self.voxelize(target, voxelsize=voxelsize, 
+                                                                        buffer=minibox_size//2,
+                                                                        validitychecks=validitychecks)
         # Print current status if appropriate
         if verbose == 1:
             print(f"Evaluating target: {target}")
 
         # Evaluate the indicated regions to determine whether they are or not metal-binding
-        protein_scores = self.evaluate(protein_vox, protein_centers=protein_centers, candidates=candidates, 
-                                        voxelsize=voxelsize, minibox_size=minibox_size, stride=stride)
+        protein_scores = self.evaluate(protein_vox, centers, protein_centers=protein_centers, candidates=candidates, 
+                                        voxelsize=voxelsize, minibox_size=minibox_size, stride=stride, 
+                                        occupancy_restrictions=occupancy_restrictions)
         # Save results with the appropriate files
-        if output_option.lower() == 'pdb': self.create_PDB(output_dir, target, protein_scores, threshold)
+        if output_option.lower() == 'pdb': self.create_PDB(output_dir, target, protein_scores, threshold_1, threshold_2)
         elif output_option.lower() == 'txt': self.create_txt(output_dir, protein_scores)
         elif str(output_option).lower() == 'none': return protein_scores
         elif output_option.lower() == 'all':
-            self.create_PDB(output_dir, target, protein_scores, threshold=threshold)
+            self.create_PDB(output_dir, target, protein_scores, threshold_1, threshold_2)
             self.create_txt(output_dir, protein_scores)
         else:
             raise ValueError(f"Output option {output_option} not supported.\nPlease use one of the supported options: 'PDB', 'txt', 'all', or 'none'")
@@ -345,10 +348,10 @@ class aule():
         protein_vox = new_protein_vox.transpose().reshape([1, nchannels, protein_N[0], protein_N[1], protein_N[2]])
         nvoxels = np.array([protein_N[0], protein_N[1], protein_N[2]])
 
-        return protein_vox, protein_centers, nvoxels
+        return centers, protein_vox, protein_centers, nvoxels
 
-    def evaluate(self, protein_vox : np.array, protein_centers : np.array, candidates : str or np.array or list,
-                voxelsize : float=1, minibox_size : int=16, stride : int=1) -> np.array:
+    def evaluate(self, protein_vox : np.array, centers : np.array, protein_centers : np.array, candidates : str or np.array or list,
+                voxelsize : float=1, minibox_size : int=16, stride : int=1, occupancy_restrictions : float=0.4) -> np.array:
         """
         Traverse a voxelized representation of the target protein and evaluate 
         the metal-bindingness of all its regions. If candidates have been provided
@@ -412,7 +415,7 @@ class aule():
                 candidate_voxels = self._get_candidate_voxels(candidates, protein_centers, np.array([size_x, size_z, size_z]), voxelsize)
             else:
                 raise TypeError('Candidates should be either:\n  a) string with the path to a Biometall PDB output or\n  b) list or np.array with cartesian coordinates')
-        
+
         # Move input and output data to GPU device, if required.
         protein_vox = torch.tensor(protein_vox, device=self.device).float()
 
@@ -426,11 +429,13 @@ class aule():
             for i in range(half_size, size_x-half_size, stride):
                 for j in range(half_size, size_y-half_size, stride):
                     for k in range(half_size, size_z-half_size, stride):
-                        evaluated_vox[i,j,k] = self.model(protein_vox[:, :,
-                                                                    i-half_size:i+half_size,
-                                                                    j-half_size:j+half_size,
-                                                                    k-half_size:k+half_size
-                                                                    ]).detach().numpy()
+                        if protein_vox[:,5,i,j,k] < occupancy_restrictions:
+                            evaluated_vox[i,j,k] = self.model(protein_vox[:, :,
+                                                                        i-half_size:i+half_size,
+                                                                        j-half_size:j+half_size,
+                                                                        k-half_size:k+half_size
+                                                                        ]).detach().numpy()
+
                         print(f"Analysed: {(counter/(x_dim*y_dim*z_dim))*100} %")
                         counter += 1
         # else, traverse the candidate voxels and only evaluate them.
@@ -452,22 +457,36 @@ class aule():
         return evaluated_vox
 
     def create_PDB(self, output_dir : str, target_name : str, protein_scores : np.array, 
-                    threshold : float):
+                    threshold_1 : float, threshold_2 : float):
         """
         """
-        with open(os.path.join(output_dir, target_name+'_results_aule.pdb'), "w") as of:
+        with open(os.path.join(output_dir, target_name+'_results_aule.pdb'), "w") as fo:
             num_at = 0
             num_res = 0
             for entry in protein_scores:
-                if entry[3] > 0.0:
+                if entry[3] > threshold_2:
                     num_at += 1
-                    num_res += 1
-                    if entry[3] <= threshold:
-                        atom = "AR"
-                    elif entry[3] > threshold:
-                        atom = "KR"
-                    of.write(f"ATOM" +f" {atom} "*(7-len(str(num_at))) + f"{entry}  SLN 1\n")
+                    num_res = 1
+                    ch = "A"
+                    prb_str = ""
 
+                    for idx in range(3):
+                        prb_center = "{:.8s}".format(str(round(float(entry[idx]),3)))
+                        if len(prb_center) < 8:
+                            prb_center = " "*(8-len(prb_center)) + prb_center
+                            prb_str += prb_center
+                        else:
+                            prb_str += prb_center
+                    score = "{:.8s}".format(str(round(float(entry[3]),3)))
+                    if entry[3] < threshold_1:
+                        atom = "N"
+                        atom2 = "NE"
+                    elif entry[3] >= threshold_1:
+                        atom = "N"
+                        atom2 = "NE"
+                    fo.write("ATOM" +" "*(7-len(str(num_at))) + "%s  %s  SLN %s" %(num_at, atom2, ch))
+                    fo.write(" "*(3-len(str(num_res))) + "%s     %s  1.00  0.00          %s\n" %(num_res, prb_str, atom2))
+    
     def create_txt(self, output_dir : str, protein_scores : np.array):
         raise NotImplementedError("Method still not implemented")
 
@@ -510,6 +529,13 @@ class aule():
             k += 1
         # Return the list as np.array to improve performance down the line
         return np.array(results)
+    
+    def _not_in_backbone(self, A : np.array, centers : np.array) -> bool:
+        ""
+        for center in centers[0]:
+            if self._euclidean_distance(A, center) <= 0.75:
+                return False
+        return True
 
     def _euclidean_distance(self, A : np.array, B : np.array) -> float:
         """
