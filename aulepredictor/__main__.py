@@ -4,6 +4,11 @@ import sys
 
 def parse_cli():
     p = argparse.ArgumentParser()
+    from pathlib import Path # Provisional code to access pre-trained models.
+
+    path = Path(__file__).parent / "../data/test.csv"
+    with path.open() as f:
+        test = list(csv.reader(f))
 
 
 if __name__ == '__main__':
