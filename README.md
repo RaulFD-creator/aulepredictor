@@ -2,7 +2,6 @@ AulePredictor
 ==============================
 [//]: # (Badges)
 [![GitHub Actions Build Status](https://github.com/RaulFD-creator/aulepredictor/workflows/CI/badge.svg)](https://github.com/RaulFD-creator/aulepredictor/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/RaulFD-creator/aulepredictor/branch/master/graph/badge.svg)](https://codecov.io/gh/RaulFD-creator/aulepredictor/branch/master)
 
 
 Computational tool for the prediction of metal-binding sites in proteins using deep convolutional neural networks. 
