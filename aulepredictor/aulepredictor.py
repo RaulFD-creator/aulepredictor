@@ -6,7 +6,7 @@ Neural Networks (CNNs).
 Copyright 2022 by Raúl Fernández Díaz
 """
 
-from aulepredictor.aulepredictor.models.models import General_Aule_1_0
+from .models.models import General_Aule_1_0
 from moleculekit.molecule import Molecule
 from moleculekit.tools.voxeldescriptors import getVoxelDescriptors, getCenters
 from moleculekit.tools.atomtyper import prepareProteinForAtomtyping
