@@ -5,7 +5,10 @@ AulePredictor
 [![codecov](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/AulePredictor/branch/master/graph/badge.svg)](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/AulePredictor/branch/master)
 
 
-Computational tool for the prediction of metal-binding sites in proteins using deep convolutional neural networks.
+Computational tool for the prediction of metal-binding sites in proteins using deep convolutional neural networks. 
+
+## Data generation
+Software for the pipeline to generate the necessary data sets for training the models is in [data_generation_pipeline] directory.
 
 ### Copyright
 
