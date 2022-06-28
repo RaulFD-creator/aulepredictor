@@ -1,11 +1,12 @@
 """
 AulePredictor, computational tool for the prediction of
-metal-binding regions in proteins by leveraging Deep Convolutional
-Neural Networks (DCNNs).
+metal-binding regions in proteins by leveraging Convolutional
+Neural Networks (CNNs).
 
 Copyright 2022 by Raúl Fernández Díaz
 """
 
+from aulepredictor.aulepredictor.models.models import General_Aule_1_0
 from moleculekit.molecule import Molecule
 from moleculekit.tools.voxeldescriptors import getVoxelDescriptors, getCenters
 from moleculekit.tools.atomtyper import prepareProteinForAtomtyping
@@ -13,6 +14,7 @@ import torch
 import numpy as np
 import os
 import time
+import sys
 
 class aule():
     """
@@ -21,14 +23,9 @@ class aule():
 
     Attributes
     ----------
-    model : torch.nn.Module
-        DCNN or MC-DCNN model for the prediction of 
+    model : torch.nn.Module or eztorch4conv.model
+        CNN model trained for the prediction of 
         metal-binding regions.
-    device : str
-        Device where the computations will be performed.
-        Options:
-            'cpu': Computations performed in CPU.
-            'cuda': Computations performed in GPU.
 
     Methods
     -------
@@ -38,18 +35,20 @@ class aule():
         minibox_size=16) : Perform voxelization of the target protein
                             and evaluate the regions to determine which are most
                             likely to be metal-binding sites.
+
     voxelize(protein_name, voxelsize=1, buffer=1, validitychecks=False,
              channels=['hydrophobic', 'hbond_acceptor', 'hbond_donor', 
                         'positive_ionizable', 'negative_ionizable', 
-                        'occupancies']) : Perform the voxelization of the target
-                                          protein
+                        'excluded_volume']) : Perform the voxelization of the target
+                                          protein.
+
     evaluate(protein_vox, candidates, minibox_size=16, 
             stride=1, threshold=0.75) : Evaluate the regions of the voxelized
                                         protein focusing on certain candidate regions
                                         that have been predefined.
     """
-
-    def __init__(self, model : torch.nn.Module, device : str='cpu', device_id : int=0):
+    def __init__(self, model : torch.nn.Module, architecture = 'General_Aule_1.0', 
+                        device : str='cpu', device_id : int=0, **kwargs):
         """
         Creates an instance of the aule predictor class. 
         It loads a trained DCNN or MC-DCNN model and prepares
@@ -59,31 +58,48 @@ class aule():
         Parameters
         ----------
         model : str
-            Path to where the trained model is stored
+            Path to where the weights of the trained model are stored.
+
+        architecture : str or torch.nn.Module or eztorch4conv.model, optional
+            If the model is one of the models developed by the authors,
+            introduce its string. If the model architecture is custom-made,
+            then provide the skeleton as a torch.nn.Module or equivalent.
+            
+            Options: 'General_Aule_1.0'
+
+            By default: 'General_Aule_1.0'
+
+
         device : str, optional
             Device where the computations will be performed.
+
             Options:
                 'cpu': Computations performed in CPU.
                 'cuda': Computations performed in GPU.
+
             By default: 'cpu'
+
         device_id : int, optional
             If there are more than 1 GPU devices, which
             one should be used.
             By default: 0
-
-        Returns
-        -------
-        aule : aule class object
-            Aule predictor class instance
         """
         if device == 'cuda':
             torch.backends.cudnn.benchmark = True
             torch.backends.cudnn.fastest = True
             torch.cuda.set_device(device_id)
 
-        self.model = model
-        self.device = device
+        if architecture == 'General_Aule_1.0':
+            self.model = General_Aule_1_0()
+            self.name = model
+        
+        elif isinstance(architecture, str):
+            print('Architecture not supported. Available options:')
+            print('General_Aule_1.0')
+            sys.exit()
+
         self.model.to(device)
+        self.model.load_state_dict(model)
         self.model.eval()
 
     def __str__(self):
@@ -95,108 +111,116 @@ class aule():
         aule_str : str
             String representation of the aule predictor class
         """
-        return f"Aule predictor class powered by model: {self.model}"
+        return f"Aule predictor class powered by model: {self.name}"
 
-    def predict(self, target : str,  output_dir : str='.', output_option : str='pdb',
-            candidates : str or np.array or list=None, stride: int=1, threshold_1 : float=0.75, threshold_2 : float=0.6, 
+    def predict(self, target,  output_dir : str='.', output_option : str='pdb',
+            candidates : str or np.array or list=None, stride: int=1, threshold : float=0.9, 
             verbose : int=1, voxelsize : float=1, validitychecks : bool=False, 
-            minibox_size : int=16, occupancy_restrictions : float=0.4) -> np.array:
+            minibox_size : int=16, occupancy_restrictions : float=0.4, **kwargs) -> np.array:
         """
-        Take a target protein either from its PDB ID or through a path to a 
-        locally stored PDB file and create from it a voxelized representation. 
+        Take a target protein a voxelized 3D representation. 
         If candidate points have been provided, evaluate only those points; 
-        else, traverse all points in the  voxelized representation and evaluate 
-        them. Finally, generate the appropriate output files which can be a 
-        Biometall-style PDB file,  a text file with the cartesian coordinates of 
-        the regions evaluated and their metal-bindingness score, both or neither.
-        In any case, it ouputs a 2D np.array where the first dimension contains 
-        the cartesian coordinates  of the centers of all voxels in the voxelized 
-        representation and the second dimentsion contains their predicted score.
+        else, traverse all points in the  voxelized representation and evaluate them. 
+        Finally, generate the appropriate output, currently, a Biometall-style PDB file.
+
         The function can work with next to none parametrization, just with its
         defaults but can also be customized with a great variety of different options.
         
         Parameters
         ---------
         target : str
-            Target protein PDB ID or path to a PDB file locally stored.
+            Target protein PDB ID or path to a PDB file locally stored. 
+
         output_dir : str, optional
             Path to the directory where output files are to be stored.
+
             By default: '.'
+
         output_option : str, optional
-            Output files that will be created.
+            Output files that will be created. Currently only PDB output
+            available, other formats are in development.
+
             Options: 
                 'PDB': A Biometall-style PDB file will be generated
-                       with Ar atoms indicating regions with a 
-                       metal-bidingness greater than 0.5 and lower
-                       than threshold and Kr atoms indicating regions
-                       with scores greater than threshold.
-                'txt': A text file with the cartesian coordinates of the regions
-                       and the metal-bindingness score they obtained.
-                'all': Generates both files.
-                'none': Does not create neither file. Output will remain
-                        only in the Python session.
-            By default: 'all'
+                       with Ne atoms indicating predicted metal-binding
+                       regions.
+                
+            By default:
+                'pdb'
+
         candidates : str or np.array or list, optional
             List of cartesian coordinates of possible metal-binding centers
             or path to the Biometall output with the predicted regions
             to be further evaluated.
+
             By default: None
+
         stride : int, optional
             Step at which the algorithm moves through the voxelized
             representation. Should not be less than voxelsize. If it 
             were greater than voxelsize, resolution would be reduced 
             though computation time would also decrease.
+
             By default: 1 
+
         threshold : float, optional
-            Metal-bindingness score value that a region has to achieve
-            to be considered metal-binding. 
+            Score value that a region has to achieve to be considered metal-binding. 
             Please note that this threshold does not represent a statistical
-            metric. Thus, a threshold of 0.75 does not mean that there is a 75 % 
-            chance that it is truly metal-binding. Deep learning scores do not allow 
-            for such statistical interpretations. To know the certainty of the 
-            predictions it is necessary to study the benchmarking results of 
-            the individual model to be used.
-            By default: 0.75
+            metric. 
+
+            By default: 0.9
+
         verbose : int, optional
             Flag that indicates how much output the program should provide
             to inform the user about the current tasks being computed.
+
             Options:
                 0: There will be no information about current tasks,
                    only relevant warnings that may arise from use 
                    of third party software (Moleculekit package)
                 1: The program will inform about which task is currently 
                    being computed.
-            By default: 1              
+
+            By default: 1       
+
         voxelsize : float, optional
             Resolution of the voxelized images to be generated from the 
-            target protein. Units in Armstrongs. Lower values will increase
-            precision but will multiply computational costs, conversely greater
-            values decrease precision but reduce computational cost.
+            target protein. Units in Arnstrongs.
+
             By default: 1
+
         buffer : int, optional
             Number of voxels introduced as padding surrounding the voxelized molecule.
-            By default: 1
+
+            By default: 8
+
         validitychecks : bool, optional
             Flag that indicates whether a series of validity checks should be performed
             during voxelization to ensure that there are no problems. Activating it
             increases computational cost and may generate errors that have to be manually
             handled.
-            By default: False
-        minibox_size : int, optional         print(target)
 
+            By default: False
+
+        minibox_size : int, optional 
             Size of the region to be evaluated. Units in Armstrongs.
+
             By default: 16
 
         Raises
         ------
         FileNotFoundError : candidates is a string but no file cannot be found where
                             its path is indicating. Error raised by function evaluate().
+
         TypeError : If target is not a string, raise the error and inform of the type
                     parameter target should contain.
+
         TypeError : candidates parameter does not contain neither a list, 
                     an np.array nor a string. Error raised by function evaluate().
+
         ValueError : If an output_option has been indicated that is not supported, raise
                      the error and inform of the supported options.
+                       
         ValueError : If any of the channels provided is not supported, 
                      raise the error and inform of the supported channels. 
                      Error raised by function voxelize().
@@ -216,7 +240,7 @@ class aule():
         """
         start = time.time()
         # Check that the input has the appropriate format
-        if not isinstance(target, str):
+        if not isinstance(target, str) :
             raise TypeError('Target has to be:\n  a) string with PDB ID or\n  b) path to local PDB file.')
 
         # Print current status if appropriate
@@ -236,11 +260,11 @@ class aule():
                                         voxelsize=voxelsize, minibox_size=minibox_size, stride=stride, 
                                         occupancy_restrictions=occupancy_restrictions)
         # Save results with the appropriate files
-        if output_option.lower() == 'pdb': self.create_PDB(output_dir, target, protein_scores, threshold_1, threshold_2)
+        if output_option.lower() == 'pdb': self.create_PDB(output_dir, target, protein_scores, threshold)
         elif output_option.lower() == 'txt': self.create_txt(output_dir, protein_scores)
         elif str(output_option).lower() == 'none': return protein_scores
         elif output_option.lower() == 'all':
-            self.create_PDB(output_dir, target, protein_scores, threshold_1, threshold_2)
+            self.create_PDB(output_dir, target, protein_scores, threshold)
             self.create_txt(output_dir, protein_scores)
         else:
             raise ValueError(f"Output option {output_option} not supported.\nPlease use one of the supported options: 'PDB', 'txt', 'all', or 'none'")
@@ -250,40 +274,49 @@ class aule():
         # Return protein_scores 
         return protein_scores
       
-    def voxelize(self, protein_name : str, voxelsize : int or float=1, buffer : int=1, validitychecks : bool=False, 
+    def voxelize(self, target, voxelsize : int or float=1, buffer : int=1, validitychecks : bool=False, 
                 channels : list=['hydrophobic', 'hbond_acceptor', 'hbond_donor', 
-                          'positive_ionizable', 'negative_ionizable', 'occupancies']):
+                          'positive_ionizable', 'negative_ionizable', 'excluded_volume'], **kwargs):
         """
-        Function to perform voxelization. It takes a molecule object (moleculekit) and 
+        Function to perform voxelization. It takes a Molecule object from Moleculekit and 
         creates a voxelixed image with 3 dimensions and up to 8 channels. 
         
         Parameters
         ----------
-        protein_name : str
-            PDB ID of the target protein.
+        protein_name : str or Molecule
+            PDB ID of the target protein or path to a local PDB file or
+            Molecule object.
+
         voxelsize : float, optional
             Resolution of the voxelized images to be generated from the 
-            target protein. Units in Armstrongs. Lower values will increase
-            precision but will multiply computational costs, conversely greater
-            values decrease precision but reduce computational cost.
+            target protein. Units in Arnstrongs.
+¡
             By default: 1        
+
         buffer : int, optional
             Number of voxels introduced as padding surrounding the voxelized molecule.
+
             By default: 1
+
         validitychecks : bool, optional
             Flag that indicates whether a series of validity checks should be performed
             during voxelization to ensure that there are no problems. Activating it
             increases computational cost and may generate errors that have to be manually
             handled.
+
             By default: False
+
         channels : list, optional
             List of channels to be computed for voxelization.
+
             Supported channels:
                 ['hydrophobic', 'aromatic', 'hbond_acceptor', 'hbond_donor',
-                'positive_ionizable', 'negative_ionizable', 'metal', 'occupancies'].
+                'positive_ionizable', 'negative_ionizable', 'metal', 'excluded_volume'].
+
             By default:
                 ['hydrophobic', 'hbond_acceptor', 'hbond_donor', 'positive_ionizable', 
-                'negative_ionizable', 'occupancies'].
+                'negative_ionizable', 'excluded_volume'].
+
         Raises
         ------
         ValueError : If any of the channels provided is not supported, 
@@ -304,11 +337,16 @@ class aule():
         >>> protein_name = '3jys'
         >>> metal_dir = MG
         >>> channels = ['hydrophobic', 'hbond_acceptor', 'hbond_donor', 
-                        'positive_ionizable', 'negative_ionizable', 'occupancies']
+                        'positive_ionizable', 'negative_ionizable', 'excluded_volume']
         >>> protein_vox, protein_centers, nvoxels = aule.voxelize(protein_name, channels)
         """
         # Create a Molecule object (moleculekit package) with the information of the protein
-        protein = Molecule(protein_name) 
+        if isinstance(target, str):
+            protein = Molecule(target)
+        elif isinstance(target, Molecule):
+            protein = target
+        else:
+            raise TypeError('Target input has to be either: a) PDB ID, b) path to local PDB file, c) Molecule object.') 
 
         # Remove all non-protein atoms within the Molecule
         protein.remove("not protein") 
@@ -351,41 +389,48 @@ class aule():
         return centers, protein_vox, protein_centers, nvoxels
 
     def evaluate(self, protein_vox : np.array, centers : np.array, protein_centers : np.array, candidates : str or np.array or list,
-                voxelsize : float=1, minibox_size : int=16, stride : int=1, occupancy_restrictions : float=0.4) -> np.array:
+                voxelsize : float=1, minibox_size : int=16, stride : int=1, occupancy_restrictions : float=0.4, **kwargs) -> np.array:
         """
         Traverse a voxelized representation of the target protein and evaluate 
-        the metal-bindingness of all its regions. If candidates have been provided
+        all of its regions. If candidates have been provided
         either in the form of a PDB biometall output file or in the form of 
         a np.array or list with predefined cartesian coordinates, only evaluate
-        these candidate points.watch -n0.1 nvidia-smi
+        these candidate points.
 
         Parameters
         ----------
         protein_vox : np.array
             Voxelized representation of the target protein.
+
         protein_centers : np.array
             List with the cartesian coordinates of the voxel centers.
+
         candidates : list, np.array or str, optional
             List of cartesian coordinates of possible metal-binding centers
             or path to the biometall output with the predicted regions
             to be further evaluated.
+
         voxelsize : float, optional
-            Resolution of the voxelized image. Units in Armstrongs. 
+            Resolution of the voxelized image. Units in Arnstrongs. 
+
             By default: 1
+
         minibox_size : int, optional 
-            Size of the region to be evaluated. Units in Armstrongs.
+            Size of the region to be evaluated. Units in Arnstrongs.
+
             By default: 16
+
         stride : int, optional
             Step at which the algorithm moves through the voxelized
-            representation. Should not be less than voxelsize, if it 
-            is greater than voxelsize resolution will be lower but
-            computation time will decrease greatly.
+            representation.
+
             By default: 1 
 
         Raises
         -------
         TypeError: candidates parameter is not None and does not contain neither a list, 
                     an np.array nor a string.
+
         FileNotFoundError : candidates is a string but no file cannot be found where
                     its path is indicating. This error is raised by helper function
                     _get_candidate_voxels().
@@ -396,7 +441,7 @@ class aule():
             2D np.array where the first dimension contains the cartesian 
             coordinates of all the voxels in the voxelized representation
             of the target protein and the second dimension the predicted
-            metal-bindingness score.
+            score.
         """    
         # Obtain information from the voxelized representation
         size_x = protein_vox.shape[2]
@@ -435,7 +480,7 @@ class aule():
                                                                         j-half_size:j+half_size,
                                                                         k-half_size:k+half_size
                                                                         ]).detach().numpy()
-
+                        
                         print(f"Analysed: {(counter/(x_dim*y_dim*z_dim))*100} %")
                         counter += 1
         # else, traverse the candidate voxels and only evaluate them.
@@ -457,14 +502,30 @@ class aule():
         return evaluated_vox
 
     def create_PDB(self, output_dir : str, target_name : str, protein_scores : np.array, 
-                    threshold_1 : float, threshold_2 : float):
+                    threshold : float=0.9):
         """
+        Generate an output file in PDB format so that it can be processed with
+        the corresponding visualization tools.
+
+        Arguments
+        ---------
+        output_dir : str
+            Path to the directory where output files should be stored.
+        
+        target_name : str
+            Name of the output file.
+
+        protein_scores : np.array
+            Scores obtained from self.evaluate method.
+        
+        threshold : float, optional
+            Minimum value to consider a prediction as positive.
         """
         with open(os.path.join(output_dir, target_name+'_results_aule.pdb'), "w") as fo:
             num_at = 0
             num_res = 0
             for entry in protein_scores:
-                if entry[3] > threshold_2:
+                if entry[3] > threshold:
                     num_at += 1
                     num_res = 1
                     ch = "A"
@@ -478,18 +539,11 @@ class aule():
                         else:
                             prb_str += prb_center
                     score = "{:.8s}".format(str(round(float(entry[3]),3)))
-                    if entry[3] < threshold_1:
-                        atom = "N"
-                        atom2 = "NE"
-                    elif entry[3] >= threshold_1:
-                        atom = "N"
-                        atom2 = "NE"
+                    atom = "N"
+                    atom2 = "NE"
                     fo.write("ATOM" +" "*(7-len(str(num_at))) + "%s  %s  SLN %s" %(num_at, atom2, ch))
                     fo.write(" "*(3-len(str(num_res))) + "%s     %s  1.00  0.00          %s\n" %(num_res, prb_str, atom2))
     
-    def create_txt(self, output_dir : str, protein_scores : np.array):
-        raise NotImplementedError("Method still not implemented")
-
     def find_candidates(self, centers : np.array, nvoxels : np.array, coords : np.array,
                         voxelsize : float) -> list:
         """
@@ -568,7 +622,7 @@ class aule():
         # Set a dictionary that relates the channel label to its dimension.
         supported_channels = {'hydrophobic': 0, 'aromatic': 1, 'hbond_acceptor': 2, 
                             'hbond_donor': 3, 'positive_ionizable': 4, 'negative_ionizable': 5, 
-                            'metal': 6, 'occupancies': 7}
+                            'metal': 6, 'excluded_volume': 7}
         # Initialise necessary lists
         working_channels = []
         undesired_channels = []
@@ -642,6 +696,9 @@ class aule_trainer():
     """
     def __init__(self, trainee):
         self.trainee = trainee
+    
+    def compile(self):
+        ""
 
 if __name__ == "__main__":
     # Do something if this file is invoked on its own
