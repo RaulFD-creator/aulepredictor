@@ -8,7 +8,8 @@ AulePredictor
 Computational tool for the prediction of metal-binding sites in proteins using deep convolutional neural networks. 
 
 ## Data generation
-Software for the pipeline to generate the necessary data sets for training the models is in [data_generation_pipeline] directory.
+To generate a data set for model training the data generation pipeline can be easily executed with the pipeline.py script. 
+
 
 ### Copyright
 
