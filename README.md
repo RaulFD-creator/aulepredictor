@@ -26,6 +26,7 @@ To define where the file is to be stored:
 `aulepredictor 1dd9 --output_dir ./outputs/`
 
 Stride of the sliding window, resolution of the voxelised representation, and threshold can be manually defined:
+
 `aulepredictor 1dd9 --stride 2 --voxelsize 0.5 --threshold 0.95`
 
 ## Advanced use
