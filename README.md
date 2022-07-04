@@ -17,7 +17,7 @@ To install AulePredictor it is recommended to prepare a conda environment.
 `pip install -e aulepredictor`
 
 ## Use
-To use AulePredictor with default settings simply introduce de PDB ID of the protein.
+To use AulePredictor with default settings simply introduce the PDB ID of the protein.
 
 `aulepredictor 1dd9`
 
