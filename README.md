@@ -23,7 +23,13 @@ To use AulePredictor with default settings simply introduce de PDB ID of the pro
 
 To define where the file is to be stored:
 
-`aulepredictor 1dd9 ./outputs/`
+`aulepredictor 1dd9 --output_dir ./outputs/`
+
+Stride of the sliding window, resolution of the voxelised representation, and threshold can be manually defined:
+`aulepredictor 1dd9 --stride 2 --voxelsize 0.5 --threshold 0.95`
+
+## Advanced use
+AulePredictor was built object-oriented, so its main class `aule` can be used to create more complex pipelines.
 
 ### Copyright
 
