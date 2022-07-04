@@ -1,5 +1,4 @@
 import torch.nn as nn
-import eztorch4conv as ez
 from .layers import *
 
 class Aule_General(nn.Module):
