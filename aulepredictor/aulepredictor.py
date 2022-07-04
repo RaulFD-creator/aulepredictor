@@ -6,7 +6,7 @@ Neural Networks (CNNs).
 Copyright 2022 by Raúl Fernández Díaz
 """
 
-from .models.models import General_Aule_1_0
+from .models.models import *
 from moleculekit.molecule import Molecule
 from moleculekit.tools.voxeldescriptors import getVoxelDescriptors, getCenters
 from moleculekit.tools.atomtyper import prepareProteinForAtomtyping
@@ -47,7 +47,7 @@ class aule():
                                         protein focusing on certain candidate regions
                                         that have been predefined.
     """
-    def __init__(self, model : torch.nn.Module, architecture = 'General_Aule_1.0', 
+    def __init__(self, model : str='Aule_General', architecture = 'Aule_General', 
                         device : str='cpu', device_id : int=0, **kwargs):
         """
         Creates an instance of the aule predictor class. 
@@ -89,17 +89,18 @@ class aule():
             torch.backends.cudnn.fastest = True
             torch.cuda.set_device(device_id)
 
-        if architecture == 'General_Aule_1.0':
-            self.model = General_Aule_1_0()
+        if architecture == 'Aule_General':
+            self.model = Aule_General()
             self.name = model
-        
-        elif isinstance(architecture, str):
-            print('Architecture not supported. Available options:')
-            print('General_Aule_1.0')
-            sys.exit()
 
+        if model is None:
+            self.model.load_state_dict(
+                torch.load(
+                    os.path.join(os.path.dirname(__file__), 'models', 'Aule_General.pt'),
+                    map_location=device))
+
+        self.device = device
         self.model.to(device)
-        self.model.load_state_dict(model)
         self.model.eval()
 
     def __str__(self):
@@ -242,7 +243,8 @@ class aule():
         # Check that the input has the appropriate format
         if not isinstance(target, str) :
             raise TypeError('Target has to be:\n  a) string with PDB ID or\n  b) path to local PDB file.')
-
+        
+        self.verbose = verbose
         # Print current status if appropriate
         if verbose == 1:
             print(f"Voxelizing target: {target}")
@@ -480,8 +482,8 @@ class aule():
                                                                         j-half_size:j+half_size,
                                                                         k-half_size:k+half_size
                                                                         ]).detach().numpy()
-                        
-                        print(f"Analysed: {(counter/(x_dim*y_dim*z_dim))*100} %")
+                        if self.verbose > 0:
+                            print(f"Analysed: {(counter/(x_dim*y_dim*z_dim))*100} %")
                         counter += 1
         # else, traverse the candidate voxels and only evaluate them.
         else:

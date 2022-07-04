@@ -2,8 +2,9 @@ import torch.nn as nn
 import eztorch4conv as ez
 from .layers import *
 
-class General_Aule_1_0(nn.Module):
+class Aule_General(nn.Module):
     def __init__(self):
+        super().__init__()
         ACTIVATION_FUNCTION = nn.ReLU()
         self.features = nn.Sequential(
             conv3d(in_channels=6, out_channels=32, kernel_size=5, stride=1, dropout=0,
