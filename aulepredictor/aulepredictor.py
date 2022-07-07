@@ -407,6 +407,8 @@ class aule():
         # Create an empty representation of the protein to be filled
         # with the metal-bindingness prediction
         evaluated_vox = np.zeros((size_x, size_y, size_z))
+        if self.device == 'cuda':
+            evaluated_vox = torch.Tensor(evaluated_vox).to(self.device)
 
         # Preprocess candidate points to locate their corresponding coordinates in the voxelized
         # representation.
@@ -430,11 +432,19 @@ class aule():
                 for j in range(half_size, size_y-half_size, stride):
                     for k in range(half_size, size_z-half_size, stride):
                         if protein_vox[:,5,i,j,k] < occupancy_restrictions:
-                            evaluated_vox[i,j,k] = self.model(protein_vox[:, :,
+                            if self.device == 'cuda':
+                                evaluated_vox[i,j,k] = self.model(protein_vox[:, :,
                                                                         i-half_size:i+half_size,
                                                                         j-half_size:j+half_size,
                                                                         k-half_size:k+half_size
-                                                                        ]).detach().numpy()
+                                                                        ]).detach()
+
+                            else:
+                                evaluated_vox[i,j,k] = self.model(protein_vox[:, :,
+                                        i-half_size:i+half_size,
+                                        j-half_size:j+half_size,
+                                        k-half_size:k+half_size
+                                        ]).detach().numpy()
 
                         print(f"Analysed: {(counter/(x_dim*y_dim*z_dim))*100} %")
                         counter += 1
@@ -453,6 +463,7 @@ class aule():
 
         # Add voxel centers column to the 1D np.array to create a 2D array
         # where cartesian coordinates are correlated to metal-bindingness
+        if self.device == 'cuda': evaluated_vox = evaluated_vox.detach().cpu().numpy()
         evaluated_vox = np.c_[protein_centers, evaluated_vox]
         return evaluated_vox
 
