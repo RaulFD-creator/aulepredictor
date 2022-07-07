@@ -484,7 +484,7 @@ class aule():
                                                                         i-half_size:i+half_size,
                                                                         j-half_size:j+half_size,
                                                                         k-half_size:k+half_size
-                                                                        ]).detach().numpy()
+                                                                        ]).detach()
                         if self.verbose > 0:
                             print(f"Analysed: {(counter/(x_dim*y_dim*z_dim))*100} %")
                         counter += 1
