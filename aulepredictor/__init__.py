@@ -2,6 +2,8 @@
 
 # Add imports here
 from .aulepredictor import *
+from .models.models import *
+from .models import *
 
 # Handle versioneer
 from ._version import get_versions
